@@ -508,7 +508,11 @@ html[dir="rtl"] .ag-form button svg { transform: scaleX(-1); }
   .ag-x { width: 44px; height: 44px; }
   .msg { max-width: 90%; }
 }
+/* lock the page behind the phone chat without letting iPhone Safari scroll it (top is set from JS) */
 html.ag-lock, html.ag-lock body { overflow: hidden; }
+html.ag-lock body { position: fixed; left: 0; right: 0; width: 100%; }
+.ag-log { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.ag-form input { touch-action: manipulation; }
 
 /* reveal */
 .rv { transition: opacity .6s ease, transform .6s ease; }
@@ -1736,6 +1740,8 @@ html.ag-lock, html.ag-lock body { overflow: hidden; }
   }
   function runAction(code) {
     var d = T[lang];
+    // on phones the chat covers the page: close it first so the page can scroll to the section
+    if (code !== "wa" && phoneMQ.matches && $("ag").classList.contains("open")) closeAgent();
     var go = function (id) { var el = $(id); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); };
     if (code.indexOf("tour:") === 0) { current = code.slice(5); buildTabs(); drawScreen(); go("tour"); }
     else if (code === "book") { go("book"); setTimeout(function () { $("b_name").focus({ preventScroll: true }); }, 600); }
@@ -1790,14 +1796,47 @@ html.ag-lock, html.ag-lock body { overflow: hidden; }
     }
   }
   var phoneMQ = window.matchMedia("(max-width: 560px)");
+  var touchMQ = window.matchMedia("(pointer: coarse)");
+  var lockY = 0;
+  // On phones the chat is a full-screen sheet. Real phones (iPhone Safari especially) shrink only the
+  // visual viewport when the keyboard opens, so size the sheet to it and keep the page pinned underneath.
+  function fitSheet() {
+    var ag = $("ag");
+    if (!ag.classList.contains("open") || !phoneMQ.matches || !window.visualViewport) { ag.style.height = ""; ag.style.top = ""; return; }
+    ag.style.height = window.visualViewport.height + "px";
+    ag.style.top = window.visualViewport.offsetTop + "px";
+    $("agLog").scrollTop = $("agLog").scrollHeight;
+  }
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", fitSheet);
+    window.visualViewport.addEventListener("scroll", fitSheet);
+  }
+  function lockPage() {
+    lockY = window.scrollY;
+    document.documentElement.classList.add("ag-lock");
+    document.body.style.top = -lockY + "px";
+  }
+  function unlockPage() {
+    if (!document.documentElement.classList.contains("ag-lock")) return;
+    document.documentElement.classList.remove("ag-lock");
+    document.body.style.top = "";
+    window.scrollTo(0, lockY);
+  }
   function openAgent() {
     $("links").classList.remove("open"); $("menuBtn").setAttribute("aria-expanded", "false");
-    if (phoneMQ.matches) document.documentElement.classList.add("ag-lock");
+    if (phoneMQ.matches) lockPage();
     $("ag").classList.add("open"); $("agBtn").setAttribute("aria-expanded", "true");
     if (!$("agLog").children.length) addMsg("bot", AG[lang].hello, ["tour:pos", "book"]);
-    $("agIn").focus();
+    fitSheet();
+    // on touch screens wait for the visitor to tap the box, so the keyboard does not jump up over the chat
+    if (!touchMQ.matches) $("agIn").focus();
   }
-  function closeAgent() { document.documentElement.classList.remove("ag-lock"); $("ag").classList.remove("open"); $("agBtn").setAttribute("aria-expanded", "false"); $("agBtn").focus(); }
+  function closeAgent() {
+    $("ag").classList.remove("open"); $("ag").style.height = ""; $("ag").style.top = "";
+    unlockPage();
+    $("agBtn").setAttribute("aria-expanded", "false");
+    if (!touchMQ.matches) $("agBtn").focus();
+  }
   $("agBtn").addEventListener("click", openAgent);
   $("agClose").addEventListener("click", closeAgent);
   $("ag").addEventListener("keydown", function (e) { if (e.key === "Escape") closeAgent(); });

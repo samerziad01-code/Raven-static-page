@@ -1882,10 +1882,14 @@ html.ag-lock body { position: fixed; left: 0; right: 0; width: 100%; }
       var w = canvas.clientWidth, h = canvas.clientHeight;
       renderer.setSize(w, h, false);
       camera.aspect = w / Math.max(h, 1); camera.updateProjectionMatrix();
-      var mark = $("l3dMark"), hr = canvas.getBoundingClientRect();
-      if (!mark) return;
-      var mr = mark.getBoundingClientRect();
-      var nx = ((mr.left + mr.width / 2 - hr.left) / w) * 2 - 1, ny = -(((mr.top + mr.height / 2 - hr.top) / h) * 2 - 1);
+      var mark = $("l3dMark"), hero = canvas.parentNode;
+      if (!mark || !w || !h) return;
+      // Measure the logo's untransformed layout box (offsetLeft/Top) relative to the hero, so the
+      // logo's own 3D sway and the page's scroll position never shift the result.
+      var x = 0, y = 0, el = mark;
+      while (el && el !== hero) { x += el.offsetLeft; y += el.offsetTop; el = el.offsetParent; }
+      if (el !== hero) { var mr = mark.getBoundingClientRect(), hr = canvas.getBoundingClientRect(); x = mr.left - hr.left; y = mr.top - hr.top; }
+      var nx = ((x + mark.offsetWidth / 2) / w) * 2 - 1, ny = -(((y + mark.offsetHeight / 2) / h) * 2 - 1);
       var v = new THREE.Vector3(nx, ny, 0.5).unproject(camera).sub(camera.position).normalize();
       var p = camera.position.clone().add(v.multiplyScalar(-camera.position.z / v.z));
       rig.position.set(p.x, p.y, 0);
@@ -1895,6 +1899,16 @@ html.ag-lock body { position: fixed; left: 0; right: 0; width: 100%; }
     window.addEventListener("resize", place);
     document.getElementById("langBtn").addEventListener("click", function () { setTimeout(place, 50); });
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(place);
+    // the logo image, web fonts and the rest of the page can finish loading after this runs and move
+    // the logo; re-measure whenever that happens so a refresh never leaves the sphere out of place
+    window.addEventListener("load", place);
+    window.addEventListener("pageshow", place);
+    document.querySelectorAll("#l3dMark img, .lockup img").forEach(function (im) { if (!im.complete) im.addEventListener("load", place); });
+    if ("ResizeObserver" in window) {
+      var ro = new ResizeObserver(function () { place(); });
+      ro.observe(canvas.parentNode);
+      var lk = document.querySelector(".lockup"); if (lk) ro.observe(lk);
+    }
 
     var mx = 0, my = 0;
     window.addEventListener("pointermove", function (e) { mx = e.clientX / window.innerWidth - 0.5; my = e.clientY / window.innerHeight - 0.5; });

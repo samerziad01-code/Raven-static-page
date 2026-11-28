@@ -514,6 +514,21 @@ html.ag-lock body { position: fixed; left: 0; right: 0; width: 100%; }
 .ag-log { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 .ag-form input { touch-action: manipulation; }
 
+/* intro overlay (first visit only) */
+.intro { position: fixed; inset: 0; z-index: 200; background: #222D32; transition: opacity .6s ease; }
+.intro[hidden] { display: none; }
+.intro.intro-out { opacity: 0; pointer-events: none; }
+.intro canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.intro-title { position: absolute; left: 0; right: 0; text-align: center; pointer-events: none; }
+.intro-word { font-family: "Montserrat", sans-serif; font-weight: 800; font-size: clamp(38px, 6vw, 78px); letter-spacing: .03em; line-height: 1; direction: ltr; color: #fff; text-shadow: 0 0 22px rgba(0,0,0,.6); }
+.intro-word .r { color: var(--red); text-shadow: 0 0 20px rgba(255,0,0,.5); }
+.intro-sub { margin-top: 10px; font-family: "Montserrat", sans-serif; font-weight: 600; font-size: clamp(11px, 1.4vw, 16px); letter-spacing: .32em; color: var(--gray); min-height: 1.4em; direction: ltr; }
+.intro-tag { margin-top: 10px; font-family: "IBM Plex Sans Arabic", "Montserrat", sans-serif; font-size: clamp(14px, 1.6vw, 18px); color: #fff; opacity: 0; transition: opacity .7s ease; }
+.intro-tag.on { opacity: 1; }
+.intro-skip { position: absolute; bottom: max(20px, env(safe-area-inset-bottom, 0px)); inset-inline-end: max(20px, env(safe-area-inset-right, 0px)); font: inherit; font-size: 15px; font-weight: 700; color: #fff; background: rgba(0,0,0,.3); border: 1px solid rgba(176,190,197,.45); border-radius: 999px; padding: 10px 20px; min-height: 44px; cursor: pointer; }
+.intro-skip:hover { border-color: var(--red); background: var(--red); }
+html.intro-on, html.intro-on body { overflow: hidden; }
+
 /* reveal */
 .rv { transition: opacity .6s ease, transform .6s ease; }
 .js .rv.pre { opacity: 0; transform: translateY(16px); }
@@ -522,6 +537,26 @@ html.ag-lock body { position: fixed; left: 0; right: 0; width: 100%; }
 </head>
 <body>
 <script>document.documentElement.classList.add('js');</script>
+
+<!-- INTRO: barcode scan -> flock of birds -> raven. Shown once per visitor (assets/intro.js). -->
+<div id="intro" class="intro" hidden>
+  <canvas aria-hidden="true"></canvas>
+  <div class="intro-title" aria-hidden="true"><div class="intro-word"></div><div class="intro-sub"></div><div class="intro-tag"></div></div>
+  <button type="button" class="intro-skip">تخطّي</button>
+</div>
+<script>
+  // Decide before anything paints, so returning visitors never see a flash of the intro.
+  (function () {
+    var el = document.getElementById("intro");
+    var force = /[?&]intro=1/.test(location.search), seen = false;
+    try { seen = localStorage.getItem("nr-intro-seen") === "1"; } catch (e) {}
+    var calm = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var bot = /bot|crawl|spider|slurp|facebookexternalhit|whatsapp|preview/i.test(navigator.userAgent) || navigator.webdriver;
+    if ((force || !seen) && !calm && !bot) { el.hidden = false; document.documentElement.classList.add("intro-on"); }
+    else el.remove();
+  })();
+</script>
+<script src="assets/intro.js" defer></script>
 
 <header class="nav">
   <div class="wrap">
@@ -1917,7 +1952,7 @@ html.ag-lock body { position: fixed; left: 0; right: 0; width: 100%; }
     if ("IntersectionObserver" in window) new IntersectionObserver(function (e) { visible = e[0].isIntersecting; }).observe(canvas);
     function frame(t) {
       requestAnimationFrame(frame);
-      if (document.hidden || !visible) return;
+      if (document.hidden || !visible || document.documentElement.classList.contains("intro-on")) return;  // the intro covers the hero: pause the sphere
       var s = reduce ? 0 : 1;
       group.rotation.y += 0.004 * s; group.rotation.x = my * 0.4; group.rotation.z = mx * 0.2;
       outer.rotation.y -= 0.0015 * s; outer.rotation.x += 0.0008 * s;
